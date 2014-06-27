@@ -25,6 +25,8 @@
 #include "ofxExtras.h"
 #include "ofxIniSettings.h"
 
+#include "ofxSyphon.h"
+
 class testApp : public ofBaseApp{
 	
 public:
@@ -66,6 +68,14 @@ public:
     
     ofxFadableVideo mediaPlayer, BackImage;
     ofImage	ExportPng;
+    
+    // syphon
+    ofTexture tex;
+    
+	ofxSyphonServer mainOutputSyphonServer;
+	ofxSyphonServer individualTextureSyphonServer;
+	
+	ofxSyphonClient mClient;
 
 };
 

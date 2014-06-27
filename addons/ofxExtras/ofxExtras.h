@@ -20,11 +20,17 @@
 #define endfor }
 #define TAU TWO_PI
 
-typedef struct { float lat, lon; } ofxLatLon;
+class ofxLatLon {
+public:
+  ofxLatLon() : lat(0), lon(0) {}
+  ofxLatLon(float _lat, float _lon) { set(lat,lon); }
+  void set(float _lat, float _lon) { lat = _lat; lon = _lon; }
+  float lat,lon;
+};
 
+bool ofxContains(vector<string> strings, string key);
 bool ofxColorMatch(ofColor a, ofColor b, int tolerance=0);
 bool ofxFileExists(string filename);
-bool ofxGetSerialString(ofSerial &serial, string &output_str, char until);
 bool ofxIsWindows();
 bool ofxMouseMoved(); //this one should be fixed to update prev only once per update/draw not per call
 bool ofxOnTimeIntervalSeconds(int s);
@@ -32,7 +38,7 @@ bool ofxStringEndsWith(string str, string key);
 bool ofxStringStartsWith(string str, string key);
 bool ofxToBoolean(float f);
 bool ofxToBoolean(string sValue);
-enum ofxAlign { LEFT, CENTER, RIGHT };
+//enum ofxAlign { LEFT, CENTER, RIGHT };
 float ofxDist(float x1, float y1, float z1, float x2, float y2, float z2);
 float ofxGetHeading(ofPoint p, ofPoint anchor=ofPoint(0,0)); //radians
 float ofxLerp(float start, float end, float amt);
@@ -40,8 +46,10 @@ int ofxGetMultiByteStringLength(string s); //returns the actual string length in
 int ofxIndex(float x, float y, float w);
 int ofxToInteger(ofColor c);
 int ofxToInteger(string str);
+ofColor ofxToColor(ofVec4f v);
+ofColor ofxToColor(ofVec3f v, int alpha=255);
 ofColor ofxToColor(int hexColor);
-ofColor ofxToColor(string hex);
+ofColor ofxToColor(string s); //parse a color from a string
 ofColor ofxToColor(unsigned char r, unsigned char g, unsigned char b);
 ofMatrix4x4 ofxToMatrix4x4(string str);
 ofMesh ofxCreateGeoSphere(int stacks=32, int slices=32);
@@ -56,6 +64,7 @@ ofQuaternion ofxToQuaternion(float lat, float lon);
 ofQuaternion ofxToQuaternion(ofxLatLon ll);
 ofQuaternion ofxToQuaternion(string str);
 ofRectangle ofxGetBoundingBox(vector<ofPoint*> points);
+ofRectangle ofxGetBoundingBox(vector<ofPoint> &points);
 ofRectangle ofxToRectangle(ofVec4f v);
 ofRectangle ofxToRectangle(string str);
 ofRectangle ofxScaleRectangle(ofRectangle rect, float s);
@@ -67,19 +76,55 @@ ofVec3f ofxToCartesian(ofQuaternion q);
 ofVec3f ofxToVec3f(float *a);
 ofVec3f ofxToVec3f(string str);
 ofVec4f ofxToVec4f(string str);
+vector<float> ofxToFloatVector(string s, string delimiter=",");
 ofxLatLon ofxToLatLon(ofQuaternion q);
+ofxLatLon ofxToLatLon(string s);
 string ofxAddTrailingSlash(string foldername);
 string ofxAddTrailingString(string str, string trail);
 string ofxFormatDateTime(time_t rawtime, string format);
 string ofxFormatString(string format, int number);
 string ofxFormatString(string format, string s);
+
+#ifdef TARGET_OS_X
+unsigned int ofxGetFileAge(string filename);
+#endif
+
 string ofxGetFileExtension(string filename);
 string ofxGetFilenameFromUrl(string url);
 string ofxGetHostName();
-string ofxGetSerialString(ofSerial &serial, char until); //no default because it's confusing
+string ofxGetSerialString(ofSerial &serial, char until);
+string ofxGetSerialString2(ofSerial &serial, char until);
 string ofxReplaceString(string input, string replace, string by);
+
+string ofxFormatDateTime(time_t rawtime, string format);
+time_t ofxParseDateTime(string datetime, string format);
+time_t ofxGetDateTime();
+string ofxGetIsoDateTime();
+
+//vector<string> ofxParseString(string str, string format);
+
+///template<typename T> T ofxFromList(vector<T> &list, float normIndex);
+template<typename T> T ofxFromList(vector<T> &list, float normIndex) {
+    int index = ofClamp(normIndex * list.size(), 0,list.size()-1);
+    if (list.size()==0) return T();
+    return list[index];
+}
+
+bool ofxStringEndsWith(string str, string key);
+bool ofxStringStartsWith(string str, string key);
+void ofxScale(float scale);
+void ofxNotice(string msg);
+void ofxSetHexColor(int hexColor, int a=255);
+void ofxSetColor(ofColor c);
+void ofxSetColorHSB(int h, int s, int b, int a=255);
+float ofxDist(float x1, float y1, float z1, float x2, float y2, float z2);
+//bool ofxColorMatch(ofColor a, ofColor b, int tolerance=0);
+
 string ofxStringAfterFirst(string str, string key);
+string ofxStringAfterLast(string str, string key);
 string ofxStringBeforeFirst(string str, string key);
+string ofxStringBeforeLast(string str, string key);
+
 string ofxToHexString(int value, int digits);
 string ofxToString(bool value);
 string ofxToString(char ch);
@@ -131,16 +176,26 @@ void ofxSaveString(string filename, string str);
 void ofxSaveStrings(string filename, vector<string> lines);
 void ofxScale(float scale);
 void ofxScale(ofVec3f v);
-void ofxSerialWrite(ofSerial &serial, string str);
-void ofxSerialWriteLine(ofSerial &serial, string str);
+//void ofxSerialWrite(ofSerial &serial, string str);
+//void ofxSerialWriteLine(ofSerial &serial, string str);
 void ofxSetColor(ofColor c);
-void ofxSetColorHSB(int h, int s, int b, int a=255);
+//void ofxSetColorHSB(int h, int s, int b, int a=255);
 void ofxSetCursor(bool bVisible);
-void ofxSetHexColor(int hexColor, int a=255);
+//void ofxSetHexColor(int hexColor, int a=255);
 void ofxSetTexture(ofBaseHasTexture &material);
 void ofxSetTexture(ofTexture &texture);
 void ofxSetWindowRect(ofRectangle w);
-void ofxSimplifyPath(ofPath &path, int iterations=10, float amount=15, float distance=1);
+//void ofxSimplifyPath(ofPath &path, int iterations=10, float amount=15, float distance=1); //of008 has no subpaths
+vector<ofPolyline> ofxGetPolylinesFromPath(ofPath path);
 void ofxTranslate(ofVec3f v);
 int ofxMakeEven(int v, int add=1);
 int ofxMakeOdd(int v, int add=1); // you can choose -1 to subtract
+ofPolyline ofxGetConvexHull(vector<ofPoint> points);
+bool isRightTurn(ofPoint a, ofPoint b, ofPoint c);
+bool lexicalComparison(const ofPoint& v1, const ofPoint& v2);
+bool ofxLoadImage(ofImage &img, string filename);
+void ofxAssertFileExists(string filename, string msg="");
+void ofxTranslate(ofMesh &mesh, ofVec3f pos);
+void ofxTranslate(ofMesh &mesh, float x, float y, float z=0);
+void ofxRotate(ofMesh &mesh, float angle, ofVec3f axis);
+void ofxScale(ofMesh &mesh, float x, float y, float z);

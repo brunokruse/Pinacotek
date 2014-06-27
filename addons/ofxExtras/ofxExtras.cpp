@@ -1,8 +1,23 @@
+#include <sys/stat.h>
 #include "ofxExtras.h"
 
 void ofxNotice(string msg) {
     ofLog(OF_LOG_NOTICE, msg);
 }
+
+#ifdef TARGET_OS_X
+unsigned int ofxGetFileAge(string filename) {
+    struct stat fileinfo;
+    int rv = stat(filename.c_str(), &fileinfo);
+    if (rv < 0 && errno == ENOENT) { //ignore if file does not exist
+        return 0;
+    } else if (rv < 0) {
+        ofLogError() << "could not stat '" << filename << "' (" << strerror(errno) << ")";
+        return -1;
+    }
+    return ofGetUnixTime() - fileinfo.st_mtimespec.tv_sec;
+}
+#endif
 
 string ofxGetFileExtension(string filename) {
     int pos = filename.rfind('.');
@@ -11,12 +26,13 @@ string ofxGetFileExtension(string filename) {
 }
 
 bool ofxFileExists(string filename) {
-    ofFile f(filename);
-    return f.exists();
-    //	ifstream inp;
-    //	inp.open(ofToDataPath(filename).c_str(), ifstream::in);
-    //	inp.close();
-    //	return !inp.fail();
+  if (filename=="") return false;
+  ofFile f(filename);
+  return f.exists();
+  //	ifstream inp;
+  //	inp.open(ofToDataPath(filename).c_str(), ifstream::in);
+  //	inp.close();
+  //	return !inp.fail();
 }
 
 string ofxAddTrailingSlash(string foldername) {
@@ -81,6 +97,8 @@ string ofxUrlToSafeLocalPath(string url) {
     filename = ofxTrimString(filename);
     filename = ofxReplaceString(filename, "http://", "");
     filename = ofxReplaceString(filename, "/", "-");
+    filename = ofxReplaceString(filename, " ", "_");
+    filename = ofxReplaceString(filename, ":", ".");
     //filename = "images/"+filename;
     return filename;
 }
@@ -95,8 +113,8 @@ vector<string> ofxLoadStrings(string url) {
     using Poco::URI;
     URI uri(url);
 
-    if (uri.isRelative()) {
-        string filename = uri.getPathAndQuery();
+    if (uri.isRelative() || !ofxStringStartsWith(url,"http")) {
+        string filename = url; //uri.getPathAndQuery();
         vector<string> lines;
         filename = ofToDataPath(filename);
         if (!ofxFileExists(filename)) { ofLogError() << "ofxLoadStrings: File not found: " << filename; return lines; }
@@ -128,7 +146,7 @@ vector<string> ofxLoadStrings(string url) {
                 return lines;
             }
         }  catch (Poco::Exception &e) {
-            ofxExit("ofxLoadStrings: Problem loading data: " + e.displayText());
+            ofxExit("ofxLoadStrings: Problem loading data: " + e.displayText() + " - " + url);
         }
     }
 }
@@ -143,6 +161,10 @@ void ofxSaveStrings(string filename, vector<string> lines) {
     ofstream file(ofToDataPath(filename).c_str(),ios::out);
     for (int i=0; i<lines.size(); i++) file << lines[i] << endl;
     file.close();
+}
+
+string ofxGetIsoDateTime() {
+    return ofxFormatDateTime(ofxGetDateTime(), "%Y-%m-%d %X");
 }
 
 string ofxFormatDateTime(time_t rawtime, string format) {
@@ -216,6 +238,21 @@ string ofxStringBeforeFirst(string str, string key) {
 string ofxStringAfterFirst(string str, string key) {
 	size_t startpos = str.find(key);
 	return (string::npos != startpos) ? str.substr(startpos+key.size()) : str;
+}
+
+string ofxStringAfterLast(string str, string key) {
+  vector<string> items = ofSplitString(str, key);
+  return items.back();
+}
+
+string ofxStringBeforeLast(string str, string key) {
+  vector<string> items = ofSplitString(str, key);
+  items.pop_back();
+  return ofJoinString(items, key);
+}
+
+bool ofxContains(vector<string> keys, string key) {
+    return std::find(keys.begin(), keys.end(), key)!=keys.end();
 }
 
 float ofxDist(float ax, float ay, float az, float bx, float by, float bz) {
@@ -334,16 +371,20 @@ ofColor ofxToColor(int hexColor) {
 	return c;
 }
 
-ofColor ofxToColor(string hex) {
-	return ofxToColor(ofxToInteger(hex));
-}
-
 ofColor ofxToColor(unsigned char r, unsigned char g, unsigned char b) {
 	ofColor c;
 	c.r = r;
 	c.g = g;
 	c.b = b;
 	return c;
+}
+
+ofColor ofxToColor(ofVec4f v) {
+	return ofColor(v.x,v.y,v.z,v.w);
+}
+
+ofColor ofxToColor(ofVec3f v, int alpha) {
+	return ofColor(v.x,v.y,v.z,alpha);
 }
 
 string ofxToHexString(int value, int digits=6) {
@@ -481,21 +522,35 @@ ofMatrix4x4 ofxToMatrix4x4(string s) {
     return ofMatrix4x4(mat);
 }
 
+vector<float> ofxToFloatVector(string s, string delimiter) {
+  vector<float> f;
+  vector<string> items = ofSplitString(s,delimiter);
+  for (int i=0; i<items.size(); i++) {
+    f.push_back(ofToFloat(items.at(i)));
+  }
+  return f;
+}
+
 void ofxQuadricSphere(float radius, int resolution) {
+#ifndef TARGET_OPENGLES
     static GLUquadricObj *quadric = gluNewQuadric(); //because it's static, it's created only once
     gluQuadricTexture(quadric, GL_TRUE);
     gluQuadricNormals(quadric, GLU_SMOOTH);
     gluSphere(quadric, radius, resolution, resolution);
+#endif
 }
 
 void ofxQuadricDisk(float innerRadius, float outerRadius, int resolution) {
+#ifndef TARGET_OPENGLES
     static GLUquadricObj *quadric = gluNewQuadric(); //because it's static, it's created only once
     gluQuadricTexture(quadric, GL_TRUE);
     gluQuadricNormals(quadric, GLU_SMOOTH);
     gluDisk(quadric, innerRadius, outerRadius, resolution, resolution);
+#endif
 }
 
 void ofxDrawDisk(ofBaseHasTexture &img,float r, float slices) {
+#ifndef TARGET_OPENGLES
     float cx = img.getTextureReference().getWidth()/2; //center of image
     float cy = img.getTextureReference().getHeight()/2; //center of image
     float step = TWO_PI/slices; //size of a slice in radians
@@ -512,6 +567,7 @@ void ofxDrawDisk(ofBaseHasTexture &img,float r, float slices) {
         glVertex2f(r*sin(f+step), r*cos(f+step));
     }
     glEnd();
+#endif
 }
 
 void ofxEnableDepthTest() {
@@ -541,7 +597,75 @@ string ofxGetSerialString(ofSerial &serial, char until) {
     }
 }
 
+string ofxGetSerialString2(ofSerial &serial, char until) {
+    static string str;
+    stringstream ss;
+    char ch;
+    int ttl=1000;
+    while ((ch=serial.readByte())>0 && ttl-->0 && ch!=until) {
+        //if (ch==OF_SERIAL_ERROR) return "OF_SERIAL_ERROR";
+        ss << ch;
+    }
+    str+=ss.str();
+    if (ch==until) {
+        string tmp=str;
+        str="";
+        return ofxTrimString(tmp);
+    } else {
+        return "";
+    }
+}
+
+//
+//bool ofxGetSerialString(ofSerial &serial, string &output_str, char until) {
+//    static string tmpstr; //cannot use output_str unless it's a member var of testApp. we want also support for local vars in functions. OR, we can try if this is really the case and needed
+//    stringstream ss;
+//    char ch;
+//    int ttl=1000;
+//    while ((ch=serial.readByte())>0 && ttl-->0 && ch!=until) {
+//        ss << ch;
+//    }
+//    tmpstr+=ss.str();
+//    if (ch==until) {
+//        output_str = tmpstr;
+//        tmpstr = "";
+//    }
+//    return tmpstr!="";
+//}
+//
+//void ofxSerialWrite(ofSerial &serial, string str) {
+//    serial.writeBytes((unsigned char*)str.c_str(), str.size());
+//}
+//
+//void ofxSerialWriteLine(ofSerial &serial, string str) {
+//    str+="\n";
+//    serial.writeBytes((unsigned char*)str.c_str(), str.size());
+//}
+
+
+/*string ofxGetSerialString(ofSerial &serial, char until) {
+#ifndef TARGET_OPENGLES
+    static string str;
+    stringstream ss;
+    char ch;
+    int ttl=1000;
+    while ((ch=serial.readByte())>0 && ttl-->0 && ch!=until) {
+        //if (ch==OF_SERIAL_ERROR) return "OF_SERIAL_ERROR";
+        ss << ch;
+    }
+    str+=ss.str();
+    if (ch==until) {
+        string tmp=str;
+        str="";
+        return ofxTrimString(tmp);
+    } else {
+        return "";
+    }
+#endif
+}
+
 bool ofxGetSerialString(ofSerial &serial, string &output_str, char until) {
+#ifndef TARGET_OPENGLES
     static string tmpstr; //cannot use output_str unless it's a member var of testApp. we want also support for local vars in functions. OR, we can try if this is really the case and needed
     stringstream ss;
     char ch;
@@ -555,16 +679,22 @@ bool ofxGetSerialString(ofSerial &serial, string &output_str, char until) {
         tmpstr = "";
     }
     return tmpstr!="";
+#endif
 }
 
 void ofxSerialWrite(ofSerial &serial, string str) {
+#ifndef TARGET_OPENGLES
     serial.writeBytes((unsigned char*)str.c_str(), str.size());
+#endif
 }
 
 void ofxSerialWriteLine(ofSerial &serial, string str) {
+#ifndef TARGET_OPENGLES
     str+="\n";
     serial.writeBytes((unsigned char*)str.c_str(), str.size());
+#endif
 }
+*/
 
 ofVec3f ofxMouseToSphere(float x, float y) {  //-0.5 ... +0.5
     ofVec3f v(x,y);
@@ -685,7 +815,9 @@ void ofxAssert(bool condition, string message) {
     }
 }
 
+
 void ofxArcStrip(float innerRadius, float outerRadius, float startAngle, float stopAngle) {  //radians
+#ifndef TARGET_OPENGLES
     float delta = fabs(stopAngle-startAngle);
     if (delta<.00001) return; //don't draw if arc to small
     int n = 200 * delta/TWO_PI; //a full circle=200 segments
@@ -701,9 +833,11 @@ void ofxArcStrip(float innerRadius, float outerRadius, float startAngle, float s
         glVertex2f(x2,y2);
     }
     glEnd();
+#endif
 }
 
 void ofxArc(float radius, float startAngle, float stopAngle, int detail) { //radians
+#ifndef TARGET_OPENGLES
     glBegin(GL_LINE_STRIP);
     for (int i=0,n=detail; i<=n; i++) {
         float f = -ofMap(i,0,n,startAngle,stopAngle);
@@ -712,6 +846,7 @@ void ofxArc(float radius, float startAngle, float stopAngle, int detail) { //rad
         glVertex2f(x,y);
     }
     glEnd();
+#endif
 }
 
 // from Cinder
@@ -794,38 +929,66 @@ ofRectangle ofxGetBoundingBox(vector<ofPoint*> points) {
     return ofRectangle(xMin,yMin,xMax-xMin,yMax-yMin);
 }
 
+ofRectangle ofxGetBoundingBox(vector<ofPoint> &points) {
+  if (points.size()<1) return ofRectangle();
+  float xMin=9999,xMax=-9999,yMin=9999,yMax=-9999;
+  for (int i=0; i<points.size(); i++) {
+    ofPoint &pt = points[i];
+    xMin = min(xMin,pt.x);
+    xMax = max(xMax,pt.x);
+    yMin = min(yMin,pt.y);
+    yMax = max(yMax,pt.y);
+  }
+  return ofRectangle(xMin,yMin,xMax-xMin,yMax-yMin);
+}
+
 ofRectangle ofxScaleRectangle(ofRectangle rect, float s) {
     return ofRectangle(rect.x*s,rect.y*s,rect.width*s,rect.height*s);
 }
 
-void ofxSimplifyPath(ofPath &path, int iterations, float amount, float distance) { //wat doet amount?? should be distance???
-    for (int iteration=0; iteration<iterations; iteration++) {
-        vector<ofSubPath> &subpaths = path.getSubPaths();
-        for (int i=0; i<subpaths.size(); i++) {
-            vector<ofSubPath::Command> &commands = subpaths[i].getCommands();
-            if (commands.size()<amount) continue;
-            for (int j=0; j<commands.size()-1; j++) {
-                if (commands[j].to.distance(commands[j+1].to)<distance) {
-                    commands[j].to = (commands[j].to+commands[j+1].to)/2;
-                    commands.erase(commands.begin()+j+1);
-                }
-            }
-        }
-    }
-    path.flagShapeChanged();
-}
+////of008 has no subpaths
+//void ofxSimplifyPath(ofPath &path, int iterations, float amount, float distance) { //wat doet amount?? should be distance???
+//    for (int iteration=0; iteration<iterations; iteration++) {
+//        vector<ofSubPath> &subpaths = path.getSubPaths();
+//        for (int i=0; i<subpaths.size(); i++) {
+//            vector<ofSubPath::Command> &commands = subpaths[i].getCommands();
+//            if (commands.size()<amount) continue;
+//            for (int j=1; j<commands.size()-2; j++) { //laat eerste en laatste punt met rust
+//                if (commands[j].to.distance(commands[j+1].to)<distance) {
+//                    commands[j].to = (commands[j].to+commands[j+1].to)/2;
+//                    commands.erase(commands.begin()+j+1);
+//                }
+//            }
+//        }
+//    }
+//    path.flagShapeChanged();
+//}
 
-vector<ofPoint*> ofxGetPointsFromPath(ofPath &path) {
-    vector<ofPoint*> points;
-    vector<ofSubPath> &subpaths = path.getSubPaths();
-    for (int i=0; i<subpaths.size(); i++) {
-        vector<ofSubPath::Command> &commands = subpaths[i].getCommands();
-        for (int j=0; j<commands.size(); j++) {
-            points.push_back(&commands[j].to);
-        }
-    }
-    return points;
-}
+//vector<ofPolyline> ofxGetPolylinesFromPath(ofPath path) {
+//    vector<ofPolyline> polylines;
+//    vector<ofSubPath> &subpaths = path.getSubPaths();
+//    for (int i=0; i<subpaths.size(); i++) {
+//        ofPolyline poly;
+//        vector<ofSubPath::Command> &commands = subpaths[i].getCommands();
+//        for (int j=0; j<commands.size()-1; j++) {
+//            poly.addVertex(commands[i].to);
+//        }
+//        polylines.push_back(poly);
+//    }
+//    return polylines;
+//}
+//
+//vector<ofPoint*> ofxGetPointsFromPath(ofPath &path) {
+//    vector<ofPoint*> points;
+//    vector<ofSubPath> &subpaths = path.getSubPaths();
+//    for (int i=0; i<subpaths.size(); i++) {
+//        vector<ofSubPath::Command> &commands = subpaths[i].getCommands();
+//        for (int j=0; j<commands.size(); j++) {
+//            points.push_back(&commands[j].to);
+//        }
+//    }
+//    return points;
+//}
 
 ofQuaternion ofxToQuaternion(ofxLatLon ll) {
     return ofxToQuaternion(ll.lat, ll.lon);
@@ -853,7 +1016,9 @@ ofVec3f ofxToCartesian(ofQuaternion q) {
 }
 
 void ofxDrawVertex(ofVec3f v) {
+#ifndef TARGET_OPENGLES
     glVertex3f(v.x,v.y,v.z);
+#endif
 }
 
 ofxLatLon ofxToLatLon(ofQuaternion q) {
@@ -867,7 +1032,15 @@ ofxLatLon ofxToLatLon(ofQuaternion q) {
     float lat = ofRadToDeg(asin(c.z));
     float lon = ofRadToDeg(-atan2(c.y,c.x))-90;
     if (lon<-180) lon+=360;
-    return (ofxLatLon){lat,lon};
+    return ofxLatLon(lat,lon);
+}
+
+ofxLatLon ofxToLatLon(string s) {
+  ofVec2f v = ofxToVec2f(s);
+	ofxLatLon ll(v.x,v.y);
+//  ll.lat = v.x;
+//  ll.lon = v.y;
+  return ll;
 }
 
 string ofxWordWrap(string input, int maxWidth, ofTrueTypeFont *font) {
@@ -966,9 +1139,128 @@ bool ofxIsWindows() {
     return false;
     #endif
 }
+//
+//template<typename T> T ofxFromList(vector<T> &list, float normIndex) {
+//    int index = ofClamp(normIndex * list.size(), 0,list.size()-1);
+//    if (list.size()==0) return T();
+//    return list[index];
+//}
 
-template<typename T> T ofxFromList(vector<T> &list, float normIndex) {
-    int index = ofClamp(normIndex * list.size(), 0,list.size()-1);
-    if (list.size()==0) return T();
-    return list[index];
+bool lexicalComparison(const ofPoint& v1, const ofPoint& v2) {
+  if (v1.x > v2.x) return true;
+  else if (v1.x < v2.x) return false;
+  else if (v1.y > v2.y) return true;
+  else return false;
+}
+
+bool isRightTurn(ofPoint a, ofPoint b, ofPoint c) {
+    // use the cross product to determin if we have a right turn
+    return ((b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x)) >= 0;
+}
+
+//vector<ofPoint>
+ofPolyline ofxGetConvexHull(vector<ofPoint> points) {
+  if (points.size()<3) return ofPolyline();
+
+  ofPoint h1,h2,h3;
+
+  sort(points.begin(), points.end(), lexicalComparison);
+
+  vector<ofPoint> hull;
+
+  hull.push_back(points.at(0));
+  hull.push_back(points.at(1));
+
+  int currentPoint = 2;
+  int direction = 1;
+
+  for (int i=0; i<1000; i++) { //max 1000 tries
+
+    hull.push_back(points.at(currentPoint));
+
+    // look at the turn direction in the last three points
+    h1 = hull.at(hull.size()-3);
+    h2 = hull.at(hull.size()-2);
+    h3 = hull.at(hull.size()-1);
+
+    // while there are more than two points in the hull
+    // and the last three points do not make a right turn
+    while (!isRightTurn(h1, h2, h3) && hull.size() > 2) {
+
+      // remove the middle of the last three points
+      hull.erase(hull.end() - 2);
+
+      if (hull.size() >= 3) {
+        h1 = hull.at(hull.size()-3);
+      }
+      h2 = hull.at(hull.size()-2);
+      h3 = hull.at(hull.size()-1);
+    }
+
+    // going through left-to-right calculates the top hull
+    // when we get to the end, we reverse direction
+    // and go back again right-to-left to calculate the bottom hull
+    if (currentPoint == points.size() -1 || currentPoint == 0) {
+      direction = direction * -1;
+    }
+
+    currentPoint+= direction;
+
+    if (hull.front()==hull.back()) break;
+  }
+
+  return ofPolyline(hull);
+}
+
+bool ofxLoadImage(ofImage &img, string filename) {
+  if (!ofxFileExists(filename)) {
+    ofxExit("ofxLoadImage: File not found: " + filename);
+  } else {
+    img.loadImage(filename);
+  }
+}
+
+void ofxAssertFileExists(string filename, string msg) {
+  ofFile file(filename);
+  ofxAssert(ofxFileExists(filename), msg + ": File not found: " + filename);
+}
+
+void ofxTranslate(ofMesh &mesh, ofVec3f pos) {
+  for (int i=0; i<mesh.getNumVertices(); i++) {
+    mesh.getVertices()[i] += pos;
+  }
+}
+
+void ofxTranslate(ofMesh &mesh, float x, float y, float z) {
+  for (int i=0; i<mesh.getNumVertices(); i++) {
+    mesh.getVertices()[i] += ofVec3f(x,y,z);
+  }
+}
+
+void ofxRotate(ofMesh &mesh, float angle, ofVec3f axis) {
+  for (int i=0; i<mesh.getNumVertices(); i++) {
+    mesh.getVertices()[i].rotate(angle, axis);
+  }
+}
+
+void ofxScale(ofMesh &mesh, float x, float y, float z) {
+  for (int i=0; i<mesh.getNumVertices(); i++) {
+    mesh.getVertices()[i].x *= x;
+    mesh.getVertices()[i].y *= y;
+    mesh.getVertices()[i].z *= z;
+  }
+}
+
+ofColor ofxToColor(string s) {
+  ofColor c;
+  if (ofxStringStartsWith(s,"#")) ofStringReplace(s,"#","0x"); //#123456
+  if (ofxStringStartsWith(s,"0x")) return ofColor::fromHex(ofxToInteger(s)); //0x123456 (hex)
+  else if (ofStringTimesInString(s,",")==3) return ofxToColor(ofxToVec4f(s)); //255,255,255,128 (r,g,b,alpha)
+  else if (ofStringTimesInString(s,",")==2) return ofxToColor(ofxToVec3f(s)); //255,255,255 (r,g,b)
+  else if (ofStringTimesInString(s,",")==1) return ofColor(ofxToVec2f(s).x,ofxToVec2f(s).y); //255,128 (gray,alpha)
+  else if (ofStringTimesInString(s,",")==0) return ofColor(ofxToInteger(s)); //gray
+  else {
+    ofLogError() << "ofxToColor(" << s << ") is not a valid color";
+    return ofColor();
+  }
 }

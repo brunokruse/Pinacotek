@@ -48,6 +48,19 @@ void testApp::setup(){
     ofxNotify::setMessagesLifeTime(NotifyTime); // Growl message duration
     ShowSettings(); // Show settings at start
 #endif
+    
+    // syphon
+    ofSetWindowTitle("ofxSyphon Example");
+    
+	mainOutputSyphonServer.setName("Screen Output");
+	individualTextureSyphonServer.setName("Texture Output");
+    
+	mClient.setup();
+    
+    //using Syphon app Simple Server, found at http://syphon.v002.info/
+    mClient.set("","Simple Server");
+	
+    tex.allocate(200, 100, GL_RGBA);
 
     
 }
@@ -98,6 +111,11 @@ void testApp::update(){
 //--------------------------------------------------------------
 void testApp::draw(){
     
+    // Clear with alpha, so we can capture via syphon and composite elsewhere should we want.
+    glClearColor(0.0, 0.0, 0.0, 0.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    
     if (mediaPlayer.isFrameNew() && (stopLoop)) { mediaPlayer.stop();
         // Stop playing media
     }
@@ -140,6 +158,13 @@ void testApp::draw(){
         
         ofHideCursor(); // Hide cursor
     }
+    
+    // Syphon Stuff
+    //mClient.draw(50, 50);
+	mainOutputSyphonServer.publishScreen();
+    //individualTextureSyphonServer.publishTexture(&tex);
+    
+    // not syphoned out since it is drawn after publishing
     if (growl) {
         ofxNotify::draw(); // Draw growl style notification
     }
